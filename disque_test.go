@@ -1,13 +1,13 @@
-package pjobs_test
+package disque_test
 
 import (
 	"testing"
 
-	"github.com/goware/pjobs"
+	"github.com/goware/disque"
 )
 
 func TestPriorityQueue(t *testing.T) {
-	jobs, err := pjobs.Connect("127.0.0.1:7711")
+	jobs, err := disque.Connect("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}

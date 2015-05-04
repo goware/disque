@@ -1,4 +1,4 @@
-package pjobs
+package disque
 
 type Job struct {
 	ID    string

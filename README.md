@@ -1,48 +1,44 @@
-# pjobs
+# disque
 
 Persistent Distributed Job Priority Queue for [golang](http://golang.org/) powered by [Disque](https://github.com/antirez/disque).
 
-- **Persistent** - Jobs can be persisted on disk.
+- **Persistent** - Jobs can be either in-memory or persisted on disk<sup>[[1]](https://github.com/antirez/disque#disque-and-disk-persistence)</sup>.
 - **Distributed** - Multiple producers, multiple consumers.
-- **Job Priority Queue** - Consumers dequeue "high" priority jobs first.
-- **Tolerant to consumer failures** - Jobs are requeued automatically if not ACKed within the Retry Timeout.
+- **Job Priority Queue** - Multiple queues. Consumers Dequeue() from higher priority queues first.
+- **Fault tolerant** - Jobs must be replicated to N nodes before Enqueue() returns. Jobs must be ACKed or they'll be re-queued automatically within a specified Retry Timeout.
 
-[![GoDoc](https://godoc.org/github.com/goware/pjobs?status.png)](https://godoc.org/github.com/goware/pjobs)
-[![Travis](https://travis-ci.org/goware/pjobs.svg?branch=master)](https://travis-ci.org/goware/pjobs)
+[![GoDoc](https://godoc.org/github.com/goware/disque?status.png)](https://godoc.org/github.com/goware/disque)
+[![Travis](https://travis-ci.org/goware/disque.svg?branch=master)](https://travis-ci.org/goware/disque)
 
 **This project is in early development stage. You can expect changes to both functionality and the API. Feedback welcome!**
 
-## Disque
-
-Install & run [Disque](https://github.com/antirez/disque) server.
-
-*TODO: Explain how to enable disk persistence.*
-
-## Producers
+## Producer
 
 ```go
-// Connect to Disque server.
-jobs, _ := pjobs.Connect("127.0.0.1:7711")
+jobs, _ := disque.Connect("127.0.0.1:7711")
 
-// Enqueue job (data + priority).
-job, _ := jobs.Enqueue("data", "low")
-job, _ := jobs.Enqueue("data", "high")
+// Enqueue some jobs.
+job1, _ := jobs.Enqueue(data1, "low")
+job2, _ := jobs.Enqueue(data2, "urgent")
+job3, _ := jobs.Enqueue(data3, "high")
 ```
 
-## Consumers
+## Consumer (worker)
 
 ```go
-// Connect to Disque server.
-jobs, _ := pjobs.Connect("127.0.0.1:7711")
+jobs, _ := disque.Connect("127.0.0.1:7711")
 
-// Dequeue job ("high" priority jobs first).
-job, _ := jobs.Dequeue("high", "low")
+for {
+    // Dequeue a job (from higher priority queues first).
+    job, _ := jobs.Dequeue("urgent", "high", "low")
 
-// Do some hard work with job.Data.
+    // Do some hard work with the job data.
+    Process(job.Data)
 
-// Acknowledge that job was processed successfully.
-jobs.Ack(job)
+    // Acknowledge that we processed the job successfully.
+    jobs.Ack(job)
+}
 ```
 
 ## License
-Pjobs is licensed under the [MIT License](./LICENSE).
+Disque is licensed under the [MIT License](./LICENSE).
