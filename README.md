@@ -1,6 +1,6 @@
 # disque
 
-Persistent Distributed Job Priority Queue for [golang](http://golang.org/) powered by [Disque](https://github.com/antirez/disque).
+[Golang](http://golang.org/) client for [Disque](https://github.com/antirez/disque), the Persistent Distributed Job Priority Queue.
 
 - **Persistent** - Jobs can be either in-memory or persisted on disk<sup>[[1]](https://github.com/antirez/disque#disque-and-disk-persistence)</sup>.
 - **Distributed** - Multiple producers, multiple consumers.
