@@ -18,9 +18,9 @@
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
 // Enqueue some jobs.
-job1, _ := jobs.Enqueue(data1, "low")
-job2, _ := jobs.Enqueue(data2, "urgent")
-job3, _ := jobs.Enqueue(data3, "high")
+job1, _ := jobs.Add(data1, "low")
+job2, _ := jobs.Add(data2, "urgent")
+job3, _ := jobs.Add(data3, "high")
 ```
 
 ## Consumer (worker)
@@ -30,10 +30,14 @@ jobs, _ := disque.Connect("127.0.0.1:7711")
 
 for {
     // Dequeue a job (from higher priority queues first).
-    job, _ := jobs.Dequeue("urgent", "high", "low")
+    job, _ := jobs.Get("urgent", "high", "low")
 
     // Do some hard work with the job data.
-    Process(job.Data)
+    err := Process(job.Data)
+    if err != nil {
+        // Re-queue job.
+        jobs.Nack(job)
+    }
 
     // Acknowledge that we processed the job successfully.
     jobs.Ack(job)
