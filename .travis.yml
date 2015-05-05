@@ -1,0 +1,19 @@
+language: go
+
+go:
+  - 1.4
+  - tip
+
+before_script:
+  - sudo apt-get install tcl8.5
+  - git clone https://github.com/antirez/disque.git disque_server
+  - "cd disque_server/src && make && PREFIX=../ make install && cd -"
+  - "./disque_server/bin/disque-server &"
+  - ./disque_server/bin/disque PING
+
+install:
+  - go get github.com/robfig/glock
+  - glock sync -n github.com/goware/disque < Glockfile
+
+script:
+  - go test
