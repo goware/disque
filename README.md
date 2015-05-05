@@ -17,16 +17,19 @@
 ```go
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
-// Enqueue "high" priority job.
-job1, _ := jobs.Add(data1, "high")
+// Enqueue job with "high" priority.
+jobs.Add(data1, "high")
 
-// Enqueue "low" priority jobs.
-job2, _ := jobs.TTL(24 * time.Hour).Add(data2, "low")
+// Enqueue job with "low" priority (and remove it after 24 hours if not ACKed).
+jobs.TTL(24 * time.Hour).Add(data2, "low")
 
-// Enqueue "urgent" priority job. Re-queue if not ACKed within one minute.
-job3, err := jobs.RetryAfter(time.Minute).Add(data3, "urgent")
+// Enqueue job with "urgent" priority. Consumers will have one minute to Ack() the job after they Get() it, or it will be re-queued.
+jobs.RetryAfter(time.Minute).Add(data3, "urgent")
+
+// Enqueue job with "urgent" priority and wait for it to finish.
+job4, err := jobs.Add(data4, "urgent")
 if err != nil {
-    jobs.Wait(job3)
+    jobs.Wait(job4)
 }
 ```
 
