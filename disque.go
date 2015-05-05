@@ -144,15 +144,18 @@ func (conn *Conn) Add(data string, queue string) (*Job, error) {
 	}, nil
 }
 
-func (conn *Conn) Get(queue string, extraQueue ...string) (*Job, error) {
+func (conn *Conn) Get(queues ...string) (*Job, error) {
+	if len(queues) == 0 {
+		return nil, errors.New("expected at least one queue")
+	}
+
 	args := []interface{}{
 		"GETJOB",
 		"TIMEOUT",
 		int(conn.conf.Timeout.Nanoseconds() / 1000000),
 		"FROM",
-		queue,
 	}
-	for _, arg := range extraQueue {
+	for _, arg := range queues {
 		args = append(args, arg)
 	}
 
@@ -202,6 +205,7 @@ func (conn *Conn) Ack(job *Job) error {
 	return nil
 }
 
+// Native NACKJOB discussed upstream at https://github.com/antirez/disque/issues/43.
 func (conn *Conn) Nack(job *Job) error {
 	sess := conn.pool.Get()
 	defer sess.Close()
@@ -209,5 +213,25 @@ func (conn *Conn) Nack(job *Job) error {
 	if _, err := sess.Do("ENQUEUE", job.ID); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/43.
+func (conn *Conn) Wait(job *Job) error {
+	sess := conn.pool.Get()
+	defer sess.Close()
+
+	for {
+		reply, err := sess.Do("SHOW", job.ID)
+		if err != nil {
+			return err
+		}
+		if reply == nil {
+			break
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	return nil
 }

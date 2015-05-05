@@ -46,7 +46,7 @@ for {
         jobs.Nack(job)
     }
 
-    // Acknowledge that we processed the job successfully.
+    // Acknowledge (dequeue) the job. Success.
     jobs.Ack(job)
 }
 ```

@@ -98,13 +98,13 @@ func TestTimeoutRetryAfter(t *testing.T) {
 	// Don't Ack() to pretend consumer failure.
 
 	// Try to dequeue job again..
-	// We should hit time-out fot the first time..
-	_, err = jobs.Timeout(750 * time.Millisecond).Get("test:retry")
+	// We should hit time-out for the first time..
+	_, err = jobs.Timeout(250 * time.Millisecond).Get("test:retry")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	// and we should be successful for the second time..
-	job, err := jobs.Timeout(750 * time.Millisecond).Get("test:retry")
+	job, err := jobs.Timeout(time.Second).Get("test:retry")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,5 +200,41 @@ func TestPriorityQueue(t *testing.T) {
 	}
 	if e := "data1"; job.Data != e {
 		t.Fatalf("expected %s, got %s", e, job.Data)
+	}
+}
+
+func TestWait(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.Connect("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	// Enqueue job.
+	start := time.Now()
+	job, err := jobs.Add("data1", "test:wait")
+	if err != nil {
+		t.Error(err)
+	}
+
+	go func() {
+		// Dequeue the job.
+		job, err := jobs.Get("test:wait")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Sleep for 1 second before ACK.
+		time.Sleep(time.Second)
+		jobs.Ack(job)
+
+	}()
+
+	// Wait for the job to finish. Should take more than 1 second.
+	jobs.Wait(job)
+	duration := time.Since(start)
+	if duration < time.Second || duration > 1500*time.Millisecond {
+		t.Fatalf("expected 1.0s - 1.5s, got %v", time.Since(start))
 	}
 }
