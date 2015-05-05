@@ -2,6 +2,7 @@ package disque
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -10,9 +11,10 @@ import (
 
 type Conn struct {
 	pool *redis.Pool
+	conf JobConfig
 }
 
-func Connect(address string, extra ...string) (Conn, error) {
+func Connect(address string, extra ...string) (*Conn, error) {
 	pool := &redis.Pool{
 		MaxIdle:     64,
 		MaxActive:   64,
@@ -30,14 +32,34 @@ func Connect(address string, extra ...string) (Conn, error) {
 			return err
 		},
 	}
-	return Conn{pool: pool}, nil
+
+	return &Conn{pool: pool, conf: defaultJobConfig}, nil
 }
 
-func (conn Conn) Close() {
+func (conn *Conn) Close() {
 	conn.pool.Close()
 }
 
-func (conn Conn) Ping() error {
+func (conn *Conn) Use(conf JobConfig) *Conn {
+	conn.conf = conf
+	return conn
+}
+
+func (conn *Conn) With(conf JobConfig) *Conn {
+	return &Conn{pool: conn.pool, conf: conf}
+}
+
+func (conn *Conn) RetryAfter(after time.Duration) *Conn {
+	conn.conf.RetryAfter = after
+	return &Conn{pool: conn.pool, conf: conn.conf}
+}
+
+func (conn *Conn) Timeout(timeout time.Duration) *Conn {
+	conn.conf.Timeout = timeout
+	return &Conn{pool: conn.pool, conf: conn.conf}
+}
+
+func (conn *Conn) Ping() error {
 	sess := conn.pool.Get()
 	defer sess.Close()
 
@@ -47,12 +69,58 @@ func (conn Conn) Ping() error {
 	return nil
 }
 
-func (conn Conn) Enqueue(data string, queue string) (*Job, error) {
+// Eh, none of the following builds successfully:
+//
+//   reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{})
+//   reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{}...)
+//   reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues)
+//   reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues...)
+//
+//   > build error:
+//   > too many arguments in call to sess.Do
+//
+// So.. let's work around this with reflect pkg.
+func (conn *Conn) do(args []interface{}) (interface{}, error) {
 	sess := conn.pool.Get()
 	defer sess.Close()
 
-	timeout := "1000"
-	reply, err := sess.Do("ADDJOB", queue, data, timeout)
+	fn := reflect.ValueOf(sess.Do)
+	reflectArgs := []reflect.Value{}
+	for _, arg := range args {
+		reflectArgs = append(reflectArgs, reflect.ValueOf(arg))
+	}
+	ret := fn.Call(reflectArgs)
+	if len(ret) != 2 {
+		return nil, errors.New("expected two return values")
+	}
+	if !ret[1].IsNil() {
+		err, ok := ret[1].Interface().(error)
+		if !ok {
+			return nil, fmt.Errorf("expected error type, got: %T %#v", ret[1], ret[1])
+		}
+		return nil, err
+	}
+	if ret[0].IsNil() {
+		return nil, fmt.Errorf("no data available")
+	}
+	reply, ok := ret[0].Interface().(interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected interface{} error type, got: %T %#v", ret[0], ret[0])
+	}
+	return reply, nil
+}
+
+func (conn *Conn) Add(data string, queue string) (*Job, error) {
+
+	args := []interface{}{
+		"ADDJOB", queue, data, conn.conf.Timeout.Nanoseconds() / 1000000,
+	}
+
+	if conn.conf.RetryAfter > 0 {
+		args = append(args, "RETRY", conn.conf.RetryAfter.Seconds())
+	}
+
+	reply, err := conn.do(args)
 	if err != nil {
 		return nil, err
 	}
@@ -69,39 +137,21 @@ func (conn Conn) Enqueue(data string, queue string) (*Job, error) {
 	}, nil
 }
 
-func (conn Conn) Dequeue(queue string, extra ...string) (*Job, error) {
-	sess := conn.pool.Get()
-	defer sess.Close()
-
-	// Eh, the following doesn't build:
-	//   reply, err := sess.Do("GETJOB", "FROM", queue, extra...)
-	//   if err != nil {
-	//		return nil, err
-	//   }
-	// I get "too many arguments in call to sess.Do" build error.
-	// So I have to build the function arguments using reflect pkg.
-	// <HACK>
-	fn := reflect.ValueOf(sess.Do)
-	args := []reflect.Value{reflect.ValueOf("GETJOB"), reflect.ValueOf("FROM"), reflect.ValueOf(queue)}
+func (conn *Conn) Get(queue string, extra ...string) (*Job, error) {
+	args := []interface{}{
+		"GETJOB",
+		"TIMEOUT",
+		int(conn.conf.Timeout.Nanoseconds() / 1000000),
+		"FROM",
+		queue,
+	}
 	for _, arg := range extra {
 		args = append(args, reflect.ValueOf(arg))
 	}
-	ret := fn.Call(args)
-	if len(ret) != 2 {
-		return nil, errors.New("expected return value #1")
-	}
-	reply, ok := ret[0].Interface().(interface{})
-	if !ok {
-		return nil, errors.New("unexpected return value #2")
-	}
-	if !ret[1].IsNil() {
-		err, ok := ret[1].Interface().(error)
-		if !ok {
-			return nil, errors.New("unexpected return value #3")
-		}
+	reply, err := conn.do(args)
+	if err != nil {
 		return nil, err
 	}
-	// </HACK>
 
 	replyArr, ok := reply.([]interface{})
 	if !ok || len(replyArr) != 1 {
@@ -134,11 +184,21 @@ func (conn Conn) Dequeue(queue string, extra ...string) (*Job, error) {
 	}, nil
 }
 
-func (conn Conn) Ack(job *Job) error {
+func (conn *Conn) Ack(job *Job) error {
 	sess := conn.pool.Get()
 	defer sess.Close()
 
 	if _, err := sess.Do("ACKJOB", job.ID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (conn *Conn) Nack(job *Job) error {
+	sess := conn.pool.Get()
+	defer sess.Close()
+
+	if _, err := sess.Do("ENQUEUE", job.ID); err != nil {
 		return err
 	}
 	return nil
