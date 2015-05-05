@@ -21,6 +21,60 @@ func TestPing(t *testing.T) {
 	}
 }
 
+func TestDelay(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.Connect("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	// Enqueue job after one second.
+	_, err = jobs.Delay(time.Second).Add("data1", "test:delay")
+	if err != nil {
+		t.Error(err)
+	}
+
+	// The job should not exist yet.
+	_, err = jobs.Get("test:delay")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	time.Sleep(time.Second)
+
+	// The job should exist now.
+	job, err := jobs.Timeout(500 * time.Millisecond).Get("test:delay")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jobs.Ack(job)
+}
+
+func TestTTL(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.Connect("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	// Enqueue job with TTL one second.
+	_, err = jobs.TTL(time.Second).Add("data1", "test:ttl")
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(1500 * time.Millisecond)
+
+	// The job should no longer exist.
+	_, err = jobs.Get("test:ttl")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestTimeoutRetryAfter(t *testing.T) {
 	// Connect to Disque.
 	jobs, err := disque.Connect("127.0.0.1:7711")
@@ -47,7 +101,7 @@ func TestTimeoutRetryAfter(t *testing.T) {
 	// We should hit time-out fot the first time..
 	_, err = jobs.Timeout(750 * time.Millisecond).Get("test:retry")
 	if err == nil {
-		t.Fatal("expected timeout error")
+		t.Fatal("expected error")
 	}
 	// and we should be successful for the second time..
 	job, err := jobs.Timeout(750 * time.Millisecond).Get("test:retry")

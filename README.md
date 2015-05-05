@@ -17,10 +17,17 @@
 ```go
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
-// Enqueue some jobs.
-job1, _ := jobs.Add(data1, "low")
-job2, _ := jobs.Add(data2, "urgent")
-job3, _ := jobs.Add(data3, "high")
+// Enqueue "high" priority job.
+job1, _ := jobs.Add(data1, "high")
+
+// Enqueue "low" priority jobs.
+job2, _ := jobs.TTL(24 * time.Hour).Add(data2, "low")
+
+// Enqueue "urgent" priority job. Re-queue if not ACKed within one minute.
+job3, err := jobs.RetryAfter(time.Minute).Add(data3, "urgent")
+if err != nil {
+    jobs.Wait(job3)
+}
 ```
 
 ## Consumer (worker)
@@ -29,13 +36,13 @@ job3, _ := jobs.Add(data3, "high")
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
 for {
-    // Dequeue a job (from higher priority queues first).
+    // Dequeue a job from highest priority queue (priority left to right).
     job, _ := jobs.Get("urgent", "high", "low")
 
     // Do some hard work with the job data.
     err := Process(job.Data)
     if err != nil {
-        // Re-queue job.
+        // Re-queue the job. This may be triggered by Panic/Recover.
         jobs.Nack(job)
     }
 

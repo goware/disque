@@ -11,7 +11,7 @@ import (
 
 type Conn struct {
 	pool *redis.Pool
-	conf JobConfig
+	conf Config
 }
 
 func Connect(address string, extra ...string) (*Conn, error) {
@@ -33,30 +33,11 @@ func Connect(address string, extra ...string) (*Conn, error) {
 		},
 	}
 
-	return &Conn{pool: pool, conf: defaultJobConfig}, nil
+	return &Conn{pool: pool, conf: defaultConfig}, nil
 }
 
 func (conn *Conn) Close() {
 	conn.pool.Close()
-}
-
-func (conn *Conn) Use(conf JobConfig) *Conn {
-	conn.conf = conf
-	return conn
-}
-
-func (conn *Conn) With(conf JobConfig) *Conn {
-	return &Conn{pool: conn.pool, conf: conf}
-}
-
-func (conn *Conn) RetryAfter(after time.Duration) *Conn {
-	conn.conf.RetryAfter = after
-	return &Conn{pool: conn.pool, conf: conn.conf}
-}
-
-func (conn *Conn) Timeout(timeout time.Duration) *Conn {
-	conn.conf.Timeout = timeout
-	return &Conn{pool: conn.pool, conf: conn.conf}
 }
 
 func (conn *Conn) Ping() error {
@@ -111,13 +92,39 @@ func (conn *Conn) do(args []interface{}) (interface{}, error) {
 }
 
 func (conn *Conn) Add(data string, queue string) (*Job, error) {
-
 	args := []interface{}{
-		"ADDJOB", queue, data, conn.conf.Timeout.Nanoseconds() / 1000000,
+		"ADDJOB",
+		queue,
+		data,
+		int(conn.conf.Timeout.Nanoseconds() / 1000000),
 	}
 
+	if conn.conf.Replicate > 0 {
+		args = append(args, "REPLICATE", conn.conf.Replicate)
+	}
+	if conn.conf.Delay > 0 {
+		delay := int(conn.conf.Delay.Seconds())
+		if delay == 0 {
+			delay = 1
+		}
+		args = append(args, "DELAY", delay)
+	}
 	if conn.conf.RetryAfter > 0 {
-		args = append(args, "RETRY", conn.conf.RetryAfter.Seconds())
+		retry := int(conn.conf.RetryAfter.Seconds())
+		if retry == 0 {
+			retry = 1
+		}
+		args = append(args, "RETRY", retry)
+	}
+	if conn.conf.TTL > 0 {
+		ttl := int(conn.conf.TTL.Seconds())
+		if ttl == 0 {
+			ttl = 1
+		}
+		args = append(args, "TTL", ttl)
+	}
+	if conn.conf.MaxLen > 0 {
+		args = append(args, "MAXLEN", conn.conf.MaxLen)
 	}
 
 	reply, err := conn.do(args)
@@ -137,7 +144,7 @@ func (conn *Conn) Add(data string, queue string) (*Job, error) {
 	}, nil
 }
 
-func (conn *Conn) Get(queue string, extra ...string) (*Job, error) {
+func (conn *Conn) Get(queue string, extraQueue ...string) (*Job, error) {
 	args := []interface{}{
 		"GETJOB",
 		"TIMEOUT",
@@ -145,9 +152,10 @@ func (conn *Conn) Get(queue string, extra ...string) (*Job, error) {
 		"FROM",
 		queue,
 	}
-	for _, arg := range extra {
-		args = append(args, reflect.ValueOf(arg))
+	for _, arg := range extraQueue {
+		args = append(args, arg)
 	}
+
 	reply, err := conn.do(args)
 	if err != nil {
 		return nil, err
