@@ -36,7 +36,7 @@ func TestDelay(t *testing.T) {
 	}
 
 	// The job should not exist yet.
-	_, err = jobs.Get("test:delay")
+	_, err = jobs.Timeout(time.Millisecond).Get("test:delay")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -61,7 +61,7 @@ func TestTTL(t *testing.T) {
 	defer jobs.Close()
 
 	// Enqueue job with TTL one second.
-	_, err = jobs.TTL(time.Second).Add("data1", "test:ttl")
+	_, err = jobs.Timeout(time.Millisecond).TTL(time.Second).Add("data1", "test:ttl")
 	if err != nil {
 		t.Error(err)
 	}
@@ -89,7 +89,7 @@ func TestTimeoutRetryAfter(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Dequeue job.
+	// Get the job.
 	_, err = jobs.Get("test:retry")
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestTimeoutRetryAfter(t *testing.T) {
 
 	// Don't Ack() to pretend consumer failure.
 
-	// Try to dequeue job again..
+	// Try to get the job again..
 	// We should hit time-out for the first time..
 	_, err = jobs.Timeout(250 * time.Millisecond).Get("test:retry")
 	if err == nil {
@@ -138,7 +138,7 @@ func TestPriorityQueue(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Dequeue first job.
+	// Get first job.
 	job, err := jobs.Get("test:urgent", "test:high", "test:low")
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestPriorityQueue(t *testing.T) {
 		t.Fatalf("expected %s, got %s", e, job.Data)
 	}
 
-	// Dequeue second job.
+	// Get second job.
 	job, err = jobs.Get("test:urgent", "test:high", "test:low")
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestPriorityQueue(t *testing.T) {
 		t.Fatalf("expected %s, got %s", e, job.Data)
 	}
 
-	// Dequeue third job and re-queue it again.
+	// Get third job and re-queue it again.
 	job, err = jobs.Get("test:urgent", "test:high", "test:low")
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestPriorityQueue(t *testing.T) {
 		t.Fatalf("expected %s, got %s", e, job.Data)
 	}
 
-	// Dequeue third job again.
+	// Get third job again.
 	job, err = jobs.Get("test:urgent", "test:high", "test:low")
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ func TestWait(t *testing.T) {
 	}
 
 	go func() {
-		// Dequeue the job.
+		// Get the job.
 		job, err := jobs.Get("test:wait")
 		if err != nil {
 			t.Fatal(err)
@@ -236,5 +236,31 @@ func TestWait(t *testing.T) {
 	duration := time.Since(start)
 	if duration < time.Second || duration > 1500*time.Millisecond {
 		t.Fatalf("expected 1.0s - 1.5s, got %v", time.Since(start))
+	}
+}
+
+func TestConfig(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.Connect("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	config := disque.Config{
+		Timeout: time.Millisecond,
+	}
+
+	// Should fail on timeout.
+	_, err = jobs.With(config).Get("test:non-existant-queue")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Should fail on timeout.
+	jobs.Use(config)
+	_, err = jobs.Get("test:non-existant-queue")
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }

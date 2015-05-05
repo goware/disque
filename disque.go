@@ -33,7 +33,7 @@ func Connect(address string, extra ...string) (*Conn, error) {
 		},
 	}
 
-	return &Conn{pool: pool, conf: defaultConfig}, nil
+	return &Conn{pool: pool}, nil
 }
 
 func (conn *Conn) Close() {

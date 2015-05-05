@@ -11,10 +11,6 @@ type Config struct {
 	MaxLen     int
 }
 
-var defaultConfig = Config{
-	Timeout: 500 * time.Millisecond,
-}
-
 func (conn *Conn) Use(conf Config) *Conn {
 	conn.conf = conf
 	return conn

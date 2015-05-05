@@ -15,43 +15,75 @@
 ## Producer
 
 ```go
-jobs, _ := disque.Connect("127.0.0.1:7711")
+import (
+    "github.com/goware/disque"
+)
 
-// Enqueue job with "high" priority.
-jobs.Add(data1, "high")
+func main() {
+    // Connect to Disque pool.
+    jobs, _ := disque.Connect("127.0.0.1:7711") // Accepts more arguments.
 
-// Enqueue job with "low" priority (and remove it after 24 hours if not ACKed).
-jobs.TTL(24 * time.Hour).Add(data2, "low")
+    // Enqueue three jobs with different priorities.
+    job1, _ := jobs.Add(data1, "high")
+    job2, _ := jobs.Add(data2, "low")
+    job3, _ := jobs.Add(data3, "urgent")
 
-// Enqueue job with "urgent" priority. Consumers will have one minute to Ack() the job after they Get() it, or it will be re-queued.
-jobs.RetryAfter(time.Minute).Add(data3, "urgent")
-
-// Enqueue job with "urgent" priority and wait for it to finish.
-job4, err := jobs.Add(data4, "urgent")
-if err != nil {
-    jobs.Wait(job4)
+    // Block until job3 is done.
+    jobs.Wait(job3)
 }
 ```
 
 ## Consumer (worker)
 
 ```go
+import (
+    "github.com/goware/disque"
+)
+
+func main() {
+    // Connect to Disque pool.
+    jobs, _ := disque.Connect("127.0.0.1:7711") // Accepts more arguments.
+
+    for {
+        // Get job from highest priority queue possible. Blocks by default.
+        job, _ := jobs.Get("urgent", "high", "low") // Left-right priority.
+
+        // Do some hard work with the job data.
+        if err := Process(job.Data); err != nil {
+            // Failed. Re-queue the job.
+            jobs.Nack(job)
+        }
+
+        // Acknowledge (dequeue) the job.
+        jobs.Ack(job)
+    }
+}
+```
+
+## Custom config (Timeout, Replicate, Delay, Retry, TTL, MaxLen)
+
+```go
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
-for {
-    // Dequeue a job from highest priority queue (priority left to right).
-    job, _ := jobs.Get("urgent", "high", "low")
-
-    // Do some hard work with the job data.
-    err := Process(job.Data)
-    if err != nil {
-        // Re-queue the job. This may be triggered by Panic/Recover.
-        jobs.Nack(job)
-    }
-
-    // Acknowledge (dequeue) the job. Success.
-    jobs.Ack(job)
+config := disque.Config{
+    Timeout:    500 * time.Second, // Each operation will fail after 1s. It blocks by default.
+    Replicate:  2,                 // Add(): Replicate job to at least two nodes before return.
+    Delay:      time.Hour,         // Add(): Schedule the job - enqueue after one hour.
+    RetryAfter: time.Minute,       // Add(): Re-queue job after 1min (time between Get() and Ack()).
+    TTL:        24 * time.Hour,    // Add(): Remove the job from queue after one day.
+    MaxLen:     1000,              // Add(): Fail if there are more than 1000 jobs in the queue.
 }
+
+// Apply globally.
+jobs.Use(config)
+
+// Apply to a single operation.
+jobs.With(config).Add(data, "queue")
+
+// Apply single option to a single operation.
+jobs.Timeout(time.Second).Get("queue", "queue2")
+jobs.MaxLen(1000).RetryAfter(time.Minute).Add(data, "queue")
+jobs.Timeout(time.Second).Add(data, "queue")
 ```
 
 ## License
