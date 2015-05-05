@@ -16,4 +16,4 @@ install:
   - glock sync -n github.com/goware/disque < Glockfile
 
 script:
-  - go test
+  - go test -timeout=10s
