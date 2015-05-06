@@ -11,7 +11,7 @@ import (
 
 type Conn struct {
 	pool *redis.Pool
-	conf JobConfig
+	conf Config
 }
 
 func Connect(address string, extra ...string) (*Conn, error) {
@@ -33,30 +33,11 @@ func Connect(address string, extra ...string) (*Conn, error) {
 		},
 	}
 
-	return &Conn{pool: pool, conf: defaultJobConfig}, nil
+	return &Conn{pool: pool}, nil
 }
 
 func (conn *Conn) Close() {
 	conn.pool.Close()
-}
-
-func (conn *Conn) Use(conf JobConfig) *Conn {
-	conn.conf = conf
-	return conn
-}
-
-func (conn *Conn) With(conf JobConfig) *Conn {
-	return &Conn{pool: conn.pool, conf: conf}
-}
-
-func (conn *Conn) RetryAfter(after time.Duration) *Conn {
-	conn.conf.RetryAfter = after
-	return &Conn{pool: conn.pool, conf: conn.conf}
-}
-
-func (conn *Conn) Timeout(timeout time.Duration) *Conn {
-	conn.conf.Timeout = timeout
-	return &Conn{pool: conn.pool, conf: conn.conf}
 }
 
 func (conn *Conn) Ping() error {
@@ -111,13 +92,39 @@ func (conn *Conn) do(args []interface{}) (interface{}, error) {
 }
 
 func (conn *Conn) Add(data string, queue string) (*Job, error) {
-
 	args := []interface{}{
-		"ADDJOB", queue, data, conn.conf.Timeout.Nanoseconds() / 1000000,
+		"ADDJOB",
+		queue,
+		data,
+		int(conn.conf.Timeout.Nanoseconds() / 1000000),
 	}
 
+	if conn.conf.Replicate > 0 {
+		args = append(args, "REPLICATE", conn.conf.Replicate)
+	}
+	if conn.conf.Delay > 0 {
+		delay := int(conn.conf.Delay.Seconds())
+		if delay == 0 {
+			delay = 1
+		}
+		args = append(args, "DELAY", delay)
+	}
 	if conn.conf.RetryAfter > 0 {
-		args = append(args, "RETRY", conn.conf.RetryAfter.Seconds())
+		retry := int(conn.conf.RetryAfter.Seconds())
+		if retry == 0 {
+			retry = 1
+		}
+		args = append(args, "RETRY", retry)
+	}
+	if conn.conf.TTL > 0 {
+		ttl := int(conn.conf.TTL.Seconds())
+		if ttl == 0 {
+			ttl = 1
+		}
+		args = append(args, "TTL", ttl)
+	}
+	if conn.conf.MaxLen > 0 {
+		args = append(args, "MAXLEN", conn.conf.MaxLen)
 	}
 
 	reply, err := conn.do(args)
@@ -137,17 +144,21 @@ func (conn *Conn) Add(data string, queue string) (*Job, error) {
 	}, nil
 }
 
-func (conn *Conn) Get(queue string, extra ...string) (*Job, error) {
+func (conn *Conn) Get(queues ...string) (*Job, error) {
+	if len(queues) == 0 {
+		return nil, errors.New("expected at least one queue")
+	}
+
 	args := []interface{}{
 		"GETJOB",
 		"TIMEOUT",
 		int(conn.conf.Timeout.Nanoseconds() / 1000000),
 		"FROM",
-		queue,
 	}
-	for _, arg := range extra {
-		args = append(args, reflect.ValueOf(arg))
+	for _, arg := range queues {
+		args = append(args, arg)
 	}
+
 	reply, err := conn.do(args)
 	if err != nil {
 		return nil, err
@@ -194,6 +205,7 @@ func (conn *Conn) Ack(job *Job) error {
 	return nil
 }
 
+// Native NACKJOB discussed upstream at https://github.com/antirez/disque/issues/43.
 func (conn *Conn) Nack(job *Job) error {
 	sess := conn.pool.Get()
 	defer sess.Close()
@@ -201,5 +213,25 @@ func (conn *Conn) Nack(job *Job) error {
 	if _, err := sess.Do("ENQUEUE", job.ID); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/43.
+func (conn *Conn) Wait(job *Job) error {
+	sess := conn.pool.Get()
+	defer sess.Close()
+
+	for {
+		reply, err := sess.Do("SHOW", job.ID)
+		if err != nil {
+			return err
+		}
+		if reply == nil {
+			break
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	return nil
 }

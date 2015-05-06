@@ -15,33 +15,75 @@
 ## Producer
 
 ```go
-jobs, _ := disque.Connect("127.0.0.1:7711")
+import (
+    "github.com/goware/disque"
+)
 
-// Enqueue some jobs.
-job1, _ := jobs.Add(data1, "low")
-job2, _ := jobs.Add(data2, "urgent")
-job3, _ := jobs.Add(data3, "high")
+func main() {
+    // Connect to Disque pool.
+    jobs, _ := disque.Connect("127.0.0.1:7711") // Accepts more arguments.
+
+    // Enqueue three jobs with different priorities.
+    job1, _ := jobs.Add(data1, "high")
+    job2, _ := jobs.Add(data2, "low")
+    job3, _ := jobs.Add(data3, "urgent")
+
+    // Block until job3 is done.
+    jobs.Wait(job3)
+}
 ```
 
 ## Consumer (worker)
 
 ```go
+import (
+    "github.com/goware/disque"
+)
+
+func main() {
+    // Connect to Disque pool.
+    jobs, _ := disque.Connect("127.0.0.1:7711") // Accepts more arguments.
+
+    for {
+        // Get job from highest priority queue possible. Blocks by default.
+        job, _ := jobs.Get("urgent", "high", "low") // Left-right priority.
+
+        // Do some hard work with the job data.
+        if err := Process(job.Data); err != nil {
+            // Failed. Re-queue the job.
+            jobs.Nack(job)
+        }
+
+        // Acknowledge (dequeue) the job.
+        jobs.Ack(job)
+    }
+}
+```
+
+## Custom config (Timeout, Replicate, Delay, Retry, TTL, MaxLen)
+
+```go
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
-for {
-    // Dequeue a job (from higher priority queues first).
-    job, _ := jobs.Get("urgent", "high", "low")
-
-    // Do some hard work with the job data.
-    err := Process(job.Data)
-    if err != nil {
-        // Re-queue job.
-        jobs.Nack(job)
-    }
-
-    // Acknowledge that we processed the job successfully.
-    jobs.Ack(job)
+config := disque.Config{
+    Timeout:    500 * time.Second, // Each operation will fail after 1s. It blocks by default.
+    Replicate:  2,                 // Add(): Replicate job to at least two nodes before return.
+    Delay:      time.Hour,         // Add(): Schedule the job - enqueue after one hour.
+    RetryAfter: time.Minute,       // Add(): Re-queue job after 1min (time between Get() and Ack()).
+    TTL:        24 * time.Hour,    // Add(): Remove the job from queue after one day.
+    MaxLen:     1000,              // Add(): Fail if there are more than 1000 jobs in the queue.
 }
+
+// Apply globally.
+jobs.Use(config)
+
+// Apply to a single operation.
+jobs.With(config).Add(data, "queue")
+
+// Apply single option to a single operation.
+jobs.Timeout(time.Second).Get("queue", "queue2")
+jobs.MaxLen(1000).RetryAfter(time.Minute).Add(data, "queue")
+jobs.Timeout(time.Second).Add(data, "queue")
 ```
 
 ## License
