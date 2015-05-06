@@ -9,14 +9,15 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-// Conn represent connection to a Disque Pool.
-type Conn struct {
-	pool *redis.Pool
-	conf Config
+// Pool represent Redis connection to a Disque Pool
+// with a certain Disque configuration.
+type Pool struct {
+	redis *redis.Pool
+	conf  Config
 }
 
-// Connect creates new connection to a given Disque Pool.
-func Connect(address string, extra ...string) (*Conn, error) {
+// New creates a new connection to a given Disque Pool.
+func New(address string, extra ...string) (*Pool, error) {
 	pool := &redis.Pool{
 		MaxIdle:     1024,
 		MaxActive:   1024,
@@ -35,17 +36,17 @@ func Connect(address string, extra ...string) (*Conn, error) {
 		},
 	}
 
-	return &Conn{pool: pool}, nil
+	return &Pool{redis: pool}, nil
 }
 
 // Close closes the connection to a Disque Pool.
-func (conn *Conn) Close() error {
-	return conn.pool.Close()
+func (pool *Pool) Close() error {
+	return pool.redis.Close()
 }
 
 // Ping returns nil if Disque Pool is alive, error otherwise.
-func (conn *Conn) Ping() error {
-	sess := conn.pool.Get()
+func (pool *Pool) Ping() error {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	if _, err := sess.Do("PING"); err != nil {
@@ -67,8 +68,8 @@ func (conn *Conn) Ping() error {
 // > Build error: "too many arguments in call to sess.Do"
 // > Runtime error: "ERR wrong number of arguments for '...' command"
 //
-func (conn *Conn) do(args []interface{}) (interface{}, error) {
-	sess := conn.pool.Get()
+func (pool *Pool) do(args []interface{}) (interface{}, error) {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	fn := reflect.ValueOf(sess.Do)
@@ -98,43 +99,43 @@ func (conn *Conn) do(args []interface{}) (interface{}, error) {
 }
 
 // Add enqueues new job with a specified data to a given queue.
-func (conn *Conn) Add(data string, queue string) (*Job, error) {
+func (pool *Pool) Add(data string, queue string) (*Job, error) {
 	args := []interface{}{
 		"ADDJOB",
 		queue,
 		data,
-		int(conn.conf.Timeout.Nanoseconds() / 1000000),
+		int(pool.conf.Timeout.Nanoseconds() / 1000000),
 	}
 
-	if conn.conf.Replicate > 0 {
-		args = append(args, "REPLICATE", conn.conf.Replicate)
+	if pool.conf.Replicate > 0 {
+		args = append(args, "REPLICATE", pool.conf.Replicate)
 	}
-	if conn.conf.Delay > 0 {
-		delay := int(conn.conf.Delay.Seconds())
+	if pool.conf.Delay > 0 {
+		delay := int(pool.conf.Delay.Seconds())
 		if delay == 0 {
 			delay = 1
 		}
 		args = append(args, "DELAY", delay)
 	}
-	if conn.conf.RetryAfter > 0 {
-		retry := int(conn.conf.RetryAfter.Seconds())
+	if pool.conf.RetryAfter > 0 {
+		retry := int(pool.conf.RetryAfter.Seconds())
 		if retry == 0 {
 			retry = 1
 		}
 		args = append(args, "RETRY", retry)
 	}
-	if conn.conf.TTL > 0 {
-		ttl := int(conn.conf.TTL.Seconds())
+	if pool.conf.TTL > 0 {
+		ttl := int(pool.conf.TTL.Seconds())
 		if ttl == 0 {
 			ttl = 1
 		}
 		args = append(args, "TTL", ttl)
 	}
-	if conn.conf.MaxLen > 0 {
-		args = append(args, "MAXLEN", conn.conf.MaxLen)
+	if pool.conf.MaxLen > 0 {
+		args = append(args, "MAXLEN", pool.conf.MaxLen)
 	}
 
-	reply, err := conn.do(args)
+	reply, err := pool.do(args)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +154,7 @@ func (conn *Conn) Add(data string, queue string) (*Job, error) {
 
 // Get returns first available job from a highest priority
 // queue possible (left-to-right priority).
-func (conn *Conn) Get(queues ...string) (*Job, error) {
+func (pool *Pool) Get(queues ...string) (*Job, error) {
 	if len(queues) == 0 {
 		return nil, errors.New("expected at least one queue")
 	}
@@ -161,14 +162,14 @@ func (conn *Conn) Get(queues ...string) (*Job, error) {
 	args := []interface{}{
 		"GETJOB",
 		"TIMEOUT",
-		int(conn.conf.Timeout.Nanoseconds() / 1000000),
+		int(pool.conf.Timeout.Nanoseconds() / 1000000),
 		"FROM",
 	}
 	for _, arg := range queues {
 		args = append(args, arg)
 	}
 
-	reply, err := conn.do(args)
+	reply, err := pool.do(args)
 	if err != nil {
 		return nil, err
 	}
@@ -205,8 +206,8 @@ func (conn *Conn) Get(queues ...string) (*Job, error) {
 }
 
 // Ack acknowledges (dequeues/removes) a job from its queue.
-func (conn *Conn) Ack(job *Job) error {
-	sess := conn.pool.Get()
+func (pool *Pool) Ack(job *Job) error {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	if _, err := sess.Do("ACKJOB", job.ID); err != nil {
@@ -217,8 +218,8 @@ func (conn *Conn) Ack(job *Job) error {
 
 // Nack re-queues a job back into its queue.
 // Native NACKJOB discussed upstream at https://github.com/antirez/disque/issues/43.
-func (conn *Conn) Nack(job *Job) error {
-	sess := conn.pool.Get()
+func (pool *Pool) Nack(job *Job) error {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	if _, err := sess.Do("ENQUEUE", job.ID); err != nil {
@@ -229,8 +230,8 @@ func (conn *Conn) Nack(job *Job) error {
 
 // Wait waits for a job to finish (blocks until it's ACKed).
 // Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/43.
-func (conn *Conn) Wait(job *Job) error {
-	sess := conn.pool.Get()
+func (pool *Pool) Wait(job *Job) error {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	for {
@@ -249,8 +250,8 @@ func (conn *Conn) Wait(job *Job) error {
 }
 
 // Len returns length of a given queue.
-func (conn *Conn) Len(queue string) (int, error) {
-	sess := conn.pool.Get()
+func (pool *Pool) Len(queue string) (int, error) {
+	sess := pool.redis.Get()
 	defer sess.Close()
 
 	length, err := redis.Int(sess.Do("QLEN", queue))

@@ -9,7 +9,7 @@ import (
 
 func TestPing(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestPing(t *testing.T) {
 
 func TestDelay(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestDelay(t *testing.T) {
 
 func TestTTL(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestTTL(t *testing.T) {
 
 func TestTimeoutRetryAfter(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestTimeoutRetryAfter(t *testing.T) {
 
 func TestPriorityQueue(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestPriorityQueue(t *testing.T) {
 
 func TestWait(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestWait(t *testing.T) {
 
 func TestConfig(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestConfig(t *testing.T) {
 
 func TestQueueLength(t *testing.T) {
 	// Connect to Disque.
-	jobs, err := disque.Connect("127.0.0.1:7711")
+	jobs, err := disque.New("127.0.0.1:7711")
 	if err != nil {
 		t.Fatal(err)
 	}
