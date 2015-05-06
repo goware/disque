@@ -246,3 +246,16 @@ func (conn *Conn) Wait(job *Job) error {
 
 	return nil
 }
+
+// Len returns length of a given queue.
+func (conn *Conn) Len(queue string) (int, error) {
+	sess := conn.pool.Get()
+	defer sess.Close()
+
+	length, err := redis.Int(sess.Do("QLEN", queue))
+	if err != nil {
+		return 0, err
+	}
+
+	return length, nil
+}

@@ -264,3 +264,58 @@ func TestConfig(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestQueueLength(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.Connect("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	var length int
+
+	// Make sure 0 jobs are enqueued.
+	length, err = jobs.Len("test:len")
+	if err != nil {
+		t.Error(err)
+	}
+	if length != 0 {
+		t.Error("unexpected length %v", length)
+	}
+
+	// Enqueue hundred jobs.
+	for i := 0; i < 100; i++ {
+		_, err = jobs.Add("data1", "test:len")
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	// Make sure 100 jobs are enqueued.
+	length, err = jobs.Len("test:len")
+	if err != nil {
+		t.Error(err)
+	}
+	if length != 100 {
+		t.Error("unexpected length %v", length)
+	}
+
+	// Dequeue hundred jobs.
+	for i := 0; i < 100; i++ {
+		job, err := jobs.Get("test:len")
+		if err != nil {
+			t.Error(err)
+		}
+		jobs.Ack(job)
+	}
+
+	// Make sure 0 jobs are enqueued.
+	length, err = jobs.Len("test:len")
+	if err != nil {
+		t.Error(err)
+	}
+	if length != 0 {
+		t.Error("unexpected length %v", length)
+	}
+}
