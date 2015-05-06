@@ -13,48 +13,48 @@ type Config struct {
 }
 
 // Use applies given config to every subsequent operation of this connection.
-func (conn *Conn) Use(conf Config) *Conn {
-	conn.conf = conf
-	return conn
+func (pool *Pool) Use(conf Config) *Pool {
+	pool.conf = conf
+	return pool
 }
 
 // With applies given config to a single operation.
-func (conn *Conn) With(conf Config) *Conn {
-	return &Conn{pool: conn.pool, conf: conf}
+func (pool *Pool) With(conf Config) *Pool {
+	return &Pool{redis: pool.redis, conf: conf}
 }
 
 // Timeout option applied to a single operation.
-func (conn *Conn) Timeout(timeout time.Duration) *Conn {
-	conn.conf.Timeout = timeout
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) Timeout(timeout time.Duration) *Pool {
+	pool.conf.Timeout = timeout
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
 
 // Replicate option applied to a single operation.
-func (conn *Conn) Replicate(replicate int) *Conn {
-	conn.conf.Replicate = replicate
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) Replicate(replicate int) *Pool {
+	pool.conf.Replicate = replicate
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
 
 // Delay option applied to a single operation.
-func (conn *Conn) Delay(delay time.Duration) *Conn {
-	conn.conf.Delay = delay
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) Delay(delay time.Duration) *Pool {
+	pool.conf.Delay = delay
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
 
 // RetryAfter option applied to a single operation.
-func (conn *Conn) RetryAfter(after time.Duration) *Conn {
-	conn.conf.RetryAfter = after
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) RetryAfter(after time.Duration) *Pool {
+	pool.conf.RetryAfter = after
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
 
 // TTL option applied to a single operation.
-func (conn *Conn) TTL(ttl time.Duration) *Conn {
-	conn.conf.TTL = ttl
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) TTL(ttl time.Duration) *Pool {
+	pool.conf.TTL = ttl
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
 
 // MaxLen option applied to a single operation.
-func (conn *Conn) MaxLen(maxlen int) *Conn {
-	conn.conf.MaxLen = maxlen
-	return &Conn{pool: conn.pool, conf: conn.conf}
+func (pool *Pool) MaxLen(maxlen int) *Pool {
+	pool.conf.MaxLen = maxlen
+	return &Pool{redis: pool.redis, conf: pool.conf}
 }
