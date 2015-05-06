@@ -39,8 +39,8 @@ func Connect(address string, extra ...string) (*Conn, error) {
 }
 
 // Close closes the connection to a Disque Pool.
-func (conn *Conn) Close() {
-	conn.pool.Close()
+func (conn *Conn) Close() error {
+	return conn.pool.Close()
 }
 
 // Ping returns nil if Disque Pool is alive, error otherwise.
