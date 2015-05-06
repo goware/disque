@@ -10,6 +10,8 @@
 [![GoDoc](https://godoc.org/github.com/goware/disque?status.png)](https://godoc.org/github.com/goware/disque)
 [![Travis](https://travis-ci.org/goware/disque.svg?branch=master)](https://travis-ci.org/goware/disque)
 
+*Note: The examples below ignore error handling for readability.*
+
 ## Producer
 
 ```go
