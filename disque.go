@@ -71,9 +71,9 @@ func (conn *Conn) do(args []interface{}) (interface{}, error) {
 	defer sess.Close()
 
 	fn := reflect.ValueOf(sess.Do)
-	reflectArgs := []reflect.Value{}
-	for _, arg := range args {
-		reflectArgs = append(reflectArgs, reflect.ValueOf(arg))
+	reflectArgs := make([]reflect.Value, len(args))
+	for i, arg := range args {
+		reflectArgs[i] = reflect.ValueOf(arg)
 	}
 	ret := fn.Call(reflectArgs)
 	if len(ret) != 2 {
