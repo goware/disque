@@ -22,6 +22,7 @@ import (
 func main() {
     // Connect to Disque pool.
     jobs, _ := disque.New("127.0.0.1:7711") // Accepts more arguments.
+    defer jobs.Close()
 
     // Enqueue three jobs with different priorities.
     job1, _ := jobs.Add(data1, "high")
@@ -43,6 +44,7 @@ import (
 func main() {
     // Connect to Disque pool.
     jobs, _ := disque.New("127.0.0.1:7711") // Accepts more arguments.
+    defer jobs.Close()
 
     for {
         // Get job from highest priority queue possible. Blocks by default.
