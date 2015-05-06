@@ -18,8 +18,8 @@ type Conn struct {
 // Connect creates new connection to a given Disque Pool.
 func Connect(address string, extra ...string) (*Conn, error) {
 	pool := &redis.Pool{
-		MaxIdle:     64,
-		MaxActive:   64,
+		MaxIdle:     1024,
+		MaxActive:   1024,
 		IdleTimeout: 300 * time.Second,
 		Wait:        true,
 		Dial: func() (redis.Conn, error) {
