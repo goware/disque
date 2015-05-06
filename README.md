@@ -62,10 +62,10 @@ func main() {
 
 | Config option | Default value | Description  |
 | ------------- |:-------------:| ------------ |
-| Timeout       | 0             | Blocks on each operation until it returns. |
+| Timeout       | 0             | Block on each operation until it returns. |
 | Replicate     | 0             | Job doesn't need to be replicated before Add() returns. |
-| Delay         | 0             | Job is added immediately. |
-| RetryAfter    | 0             | Job is not re-queued automatically. |
+| Delay         | 0             | Job is enqueued immediately. |
+| RetryAfter    | 0             | Don't re-queue job automatically. |
 | TTL           | 0             | Job lives until it's ACKed. |
 | MaxLen        | 0             | Unlimited queue. |
 
@@ -75,7 +75,7 @@ func main() {
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
 config := disque.Config{
-    Timeout:    time.Second,    // Every operation timeouts after 1s.
+    Timeout:    time.Second,    // Each operation fails after 1s timeout elapses.
     Replicate:  2,              // Replicates job to 2+ nodes before Add() returns.
     Delay:      time.Hour,      // Schedules the job (enqueues after 1h).
     RetryAfter: time.Minute,    // Re-queues the job after 1min of not being ACKed.
