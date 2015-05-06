@@ -9,11 +9,13 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
+// Conn represent a connection to a Disque Pool.
 type Conn struct {
 	pool *redis.Pool
 	conf Config
 }
 
+// Connect creates a connection to a given Disque Pool.
 func Connect(address string, extra ...string) (*Conn, error) {
 	pool := &redis.Pool{
 		MaxIdle:     64,
@@ -36,10 +38,12 @@ func Connect(address string, extra ...string) (*Conn, error) {
 	return &Conn{pool: pool}, nil
 }
 
+// Close closes connection to the Disque Pool.
 func (conn *Conn) Close() {
 	conn.pool.Close()
 }
 
+// Ping returns nil if Disque
 func (conn *Conn) Ping() error {
 	sess := conn.pool.Get()
 	defer sess.Close()
@@ -50,17 +54,18 @@ func (conn *Conn) Ping() error {
 	return nil
 }
 
-// Eh, none of the following builds successfully:
+// do is a helper function that workarounds redigo/redis API flaws
+// with reflect pkg.
 //
-//   reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{})
-//   reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{}...)
-//   reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues)
-//   reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues...)
+// None of the following builds successfully:
 //
-//   > build error:
-//   > too many arguments in call to sess.Do
+// reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{})
+// reply, err := sess.Do("GETJOB", "FROM", queue, redis.Args{}...)
+// reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues)
+// reply, err := sess.Do("GETJOB", "FROM", queue, extraQueues...)
 //
-// So.. let's work around this with reflect pkg.
+// > Error: "too many arguments in call to sess.Do"
+//
 func (conn *Conn) do(args []interface{}) (interface{}, error) {
 	sess := conn.pool.Get()
 	defer sess.Close()
@@ -91,6 +96,7 @@ func (conn *Conn) do(args []interface{}) (interface{}, error) {
 	return reply, nil
 }
 
+// Add enqueues new Job with specified data to a given queue.
 func (conn *Conn) Add(data string, queue string) (*Job, error) {
 	args := []interface{}{
 		"ADDJOB",
@@ -144,6 +150,8 @@ func (conn *Conn) Add(data string, queue string) (*Job, error) {
 	}, nil
 }
 
+// Get returns the first available job from the highest priority
+// queue (left-to-right).
 func (conn *Conn) Get(queues ...string) (*Job, error) {
 	if len(queues) == 0 {
 		return nil, errors.New("expected at least one queue")
@@ -195,6 +203,7 @@ func (conn *Conn) Get(queues ...string) (*Job, error) {
 	}, nil
 }
 
+// Ack acknowledges (dequeues) the job from its job queue.
 func (conn *Conn) Ack(job *Job) error {
 	sess := conn.pool.Get()
 	defer sess.Close()
@@ -205,6 +214,7 @@ func (conn *Conn) Ack(job *Job) error {
 	return nil
 }
 
+// Nack re-queues job into its job queue.
 // Native NACKJOB discussed upstream at https://github.com/antirez/disque/issues/43.
 func (conn *Conn) Nack(job *Job) error {
 	sess := conn.pool.Get()
@@ -216,6 +226,7 @@ func (conn *Conn) Nack(job *Job) error {
 	return nil
 }
 
+// Wait waits for the job to finish (blocks until it's ACKed).
 // Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/43.
 func (conn *Conn) Wait(job *Job) error {
 	sess := conn.pool.Get()

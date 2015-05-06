@@ -3,14 +3,12 @@
 [Golang](http://golang.org/) client for [Disque](https://github.com/antirez/disque), the Persistent Distributed Job Priority Queue.
 
 - **Persistent** - Jobs can be either in-memory or persisted on disk<sup>[[1]](https://github.com/antirez/disque#disque-and-disk-persistence)</sup>.
-- **Distributed** - Multiple producers, multiple consumers.
-- **Job Priority Queue** - Multiple queues. Consumers Dequeue() from higher priority queues first.
-- **Fault tolerant** - Jobs must be replicated to N nodes before Enqueue() returns. Jobs must be ACKed or they'll be re-queued automatically within a specified Retry Timeout.
+- **Distributed** - Disque pool. Multiple producers, multiple consumers.
+- **Job Priority Queue** - Multiple queues. Consumers `Get()` from higher priority queues first.
+- **Fault tolerant** - Jobs must be replicated to N nodes before `Add()` returns. Jobs must be `ACK()`ed after `Get()` or they'll be re-queued automatically within a specified `RetryAfter` timeout.
 
 [![GoDoc](https://godoc.org/github.com/goware/disque?status.png)](https://godoc.org/github.com/goware/disque)
 [![Travis](https://travis-ci.org/goware/disque.svg?branch=master)](https://travis-ci.org/goware/disque)
-
-**This project is in early development stage. You can expect changes to both functionality and the API. Feedback welcome!**
 
 ## Producer
 
@@ -60,18 +58,18 @@ func main() {
 }
 ```
 
-## Custom config (Timeout, Replicate, Delay, Retry, TTL, MaxLen)
+## Config (Timeout, Replicate, Delay, Retry, TTL, MaxLen)
 
 ```go
 jobs, _ := disque.Connect("127.0.0.1:7711")
 
 config := disque.Config{
-    Timeout:    500 * time.Second, // Each operation will fail after 1s. It blocks by default.
-    Replicate:  2,                 // Add(): Replicate job to at least two nodes before return.
-    Delay:      time.Hour,         // Add(): Schedule the job - enqueue after one hour.
-    RetryAfter: time.Minute,       // Add(): Re-queue job after 1min (time between Get() and Ack()).
-    TTL:        24 * time.Hour,    // Add(): Remove the job from queue after one day.
-    MaxLen:     1000,              // Add(): Fail if there are more than 1000 jobs in the queue.
+    Timeout:    time.Second,    // Each operation will fail after 1s. It blocks by default.
+    Replicate:  2,              // Add(): Replicate job to at least two nodes before return.
+    Delay:      time.Hour,      // Add(): Schedule the job - enqueue after one hour.
+    RetryAfter: time.Minute,    // Add(): Re-queue job after 1min (time between Get() and Ack()).
+    TTL:        24 * time.Hour, // Add(): Remove the job from queue after one day.
+    MaxLen:     1000,           // Add(): Fail if there are more than 1000 jobs in the queue.
 }
 
 // Apply globally.
