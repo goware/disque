@@ -217,19 +217,18 @@ func (pool *Pool) Ack(job *Job) error {
 }
 
 // Nack re-queues a job back into its queue.
-// Native NACKJOB discussed upstream at https://github.com/antirez/disque/issues/43.
 func (pool *Pool) Nack(job *Job) error {
 	sess := pool.redis.Get()
 	defer sess.Close()
 
-	if _, err := sess.Do("ENQUEUE", job.ID); err != nil {
+	if _, err := sess.Do("NACK", job.ID); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Wait waits for a job to finish (blocks until it's ACKed).
-// Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/43.
+// Wait blocks until the given job is ACKed.
+// Native WAITJOB discussed upstream at https://github.com/antirez/disque/issues/168.
 func (pool *Pool) Wait(job *Job) error {
 	sess := pool.redis.Get()
 	defer sess.Close()
@@ -243,7 +242,7 @@ func (pool *Pool) Wait(job *Job) error {
 			break
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	return nil
@@ -260,4 +259,24 @@ func (pool *Pool) Len(queue string) (int, error) {
 	}
 
 	return length, nil
+}
+
+// ActiveLen returns length of active jobs taken from a given queue.
+func (pool *Pool) ActiveLen(queue string) (int, error) {
+	sess := pool.redis.Get()
+	defer sess.Close()
+
+	reply, err := sess.Do("JSCAN", "QUEUE", queue, "STATE", "active")
+	if err != nil {
+		return 0, err
+	}
+	replyArr, ok := reply.([]interface{})
+	if !ok || len(replyArr) != 2 {
+		return 0, errors.New("unexpected reply #1")
+	}
+	jobs, ok := replyArr[1].([]interface{})
+	if !ok {
+		return 0, errors.New("unexpected reply #2")
+	}
+	return len(jobs), nil
 }
