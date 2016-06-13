@@ -163,6 +163,7 @@ func (pool *Pool) Get(queues ...string) (*Job, error) {
 		"GETJOB",
 		"TIMEOUT",
 		int(pool.conf.Timeout.Nanoseconds() / 1000000),
+		"WITHCOUNTERS",
 		"FROM",
 	}
 	for _, arg := range queues {
@@ -179,30 +180,39 @@ func (pool *Pool) Get(queues ...string) (*Job, error) {
 		return nil, errors.New("unexpected reply #1")
 	}
 	arr, ok := replyArr[0].([]interface{})
-	if !ok || len(arr) != 3 {
+	if !ok || len(arr) != 7 {
 		return nil, errors.New("unexpected reply #2")
 	}
 
-	que, ok := arr[0].([]byte)
-	if !ok {
+	job := Job{}
+
+	if bytes, ok := arr[0].([]byte); ok {
+		job.Queue = string(bytes)
+	} else {
 		return nil, errors.New("unexpected reply: queue")
 	}
 
-	id, ok := arr[1].([]byte)
-	if !ok {
+	if bytes, ok := arr[1].([]byte); ok {
+		job.ID = string(bytes)
+	} else {
 		return nil, errors.New("unexpected reply: id")
 	}
 
-	data, ok := arr[2].([]byte)
-	if !ok {
+	if bytes, ok := arr[2].([]byte); ok {
+		job.Data = string(bytes)
+	} else {
 		return nil, errors.New("unexpected reply: data")
 	}
 
-	return &Job{
-		ID:    string(id),
-		Data:  string(data),
-		Queue: string(que),
-	}, nil
+	if job.Nacks, ok = arr[4].(int64); !ok {
+		return nil, errors.New("unexpected reply: nacks")
+	}
+
+	if job.AdditionalDeliveries, ok = arr[6].(int64); !ok {
+		return nil, errors.New("unexpected reply: additional-deliveries")
+	}
+
+	return &job, nil
 }
 
 // Ack acknowledges (dequeues/removes) a job from its queue.
