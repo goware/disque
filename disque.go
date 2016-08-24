@@ -39,6 +39,10 @@ func New(address string, extra ...string) (*Pool, error) {
 	return &Pool{redis: pool}, nil
 }
 
+func NewWithPool(pool *redis.Pool) *Pool {
+	return &Pool{redis: pool}
+}
+
 // Close closes the connection to a Disque Pool.
 func (pool *Pool) Close() error {
 	return pool.redis.Close()
