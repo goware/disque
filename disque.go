@@ -239,19 +239,21 @@ func (pool *Pool) Fetch(ID string) (*Job, error) {
 
 	job := Job{}
 
-	if bytes, ok := arr[1].([]byte); ok {
+	var bytes []byte
+
+	if bytes, ok = arr[1].([]byte); ok {
 		job.ID = string(bytes)
 	} else {
 		return nil, errors.New("unexpected reply: id")
 	}
 
-	if bytes, ok := arr[3].([]byte); ok {
+	if bytes, ok = arr[3].([]byte); ok {
 		job.Queue = string(bytes)
 	} else {
 		return nil, errors.New("unexpected reply: queue")
 	}
 
-	if bytes, ok := arr[5].([]byte); ok {
+	if bytes, ok = arr[5].([]byte); ok {
 		job.State = string(bytes)
 	} else {
 		return nil, errors.New("unexpected reply: state")
