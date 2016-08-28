@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"disque"
+	"github.com/goware/disque"
 )
 
 func TestPing(t *testing.T) {
