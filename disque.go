@@ -219,6 +219,89 @@ func (pool *Pool) Get(queues ...string) (*Job, error) {
 	return &job, nil
 }
 
+// Fetch finds the job by its id and return its details
+func (pool *Pool) Fetch(ID string) (*Job, error) {
+	sess := pool.redis.Get()
+	defer sess.Close()
+
+	reply, err := pool.do([]interface{}{
+		"SHOW",
+		ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	arr, ok := reply.([]interface{})
+	if !ok || len(arr) != 30 {
+		return nil, errors.New("unexpected reply #1")
+	}
+
+	job := Job{}
+
+	if bytes, ok := arr[1].([]byte); ok {
+		job.ID = string(bytes)
+	} else {
+		return nil, errors.New("unexpected reply: id")
+	}
+
+	if bytes, ok := arr[3].([]byte); ok {
+		job.Queue = string(bytes)
+	} else {
+		return nil, errors.New("unexpected reply: queue")
+	}
+
+	if bytes, ok := arr[5].([]byte); ok {
+		job.State = string(bytes)
+	} else {
+		return nil, errors.New("unexpected reply: state")
+	}
+
+	if job.Replication, ok = arr[7].(int64); !ok {
+		return nil, errors.New("unexpected reply: repl")
+	}
+
+	if ttl, ok := arr[9].(int64); ok {
+		job.TTL = time.Duration(ttl) * time.Second
+	} else {
+		return nil, errors.New("unexpected reply: ttl")
+	}
+
+	if createdAt, ok := arr[11].(int64); ok {
+		job.CreatedAt = time.Unix(0, createdAt)
+	} else {
+		return nil, errors.New("unexpected reply: ctime")
+	}
+
+	if delay, ok := arr[13].(int64); ok {
+		job.Delay = time.Duration(delay) * time.Second
+	} else {
+		return nil, errors.New("unexpected reply: delay")
+	}
+
+	if retry, ok := arr[15].(int64); ok {
+		job.Retry = time.Duration(retry) * time.Second
+	} else {
+		return nil, errors.New("unexpected reply: retry")
+	}
+
+	if job.Nacks, ok = arr[17].(int64); !ok {
+		return nil, errors.New("unexpected reply: nacks")
+	}
+
+	if job.AdditionalDeliveries, ok = arr[19].(int64); !ok {
+		return nil, errors.New("unexpected reply: additional-deliveries")
+	}
+
+	if bytes, ok := arr[29].([]byte); ok {
+		job.Data = string(bytes)
+	} else {
+		return nil, errors.New("unexpected reply: data")
+	}
+
+	return &job, nil
+}
+
 // Ack acknowledges (dequeues/removes) a job from its queue.
 func (pool *Pool) Ack(job *Job) error {
 	sess := pool.redis.Get()
