@@ -21,6 +21,37 @@ func TestPing(t *testing.T) {
 	}
 }
 
+func TestFetch(t *testing.T) {
+	// Connect to Disque.
+	jobs, err := disque.New("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+
+	// Add.
+	job, err := jobs.Add("data0x5f3759df", "test:fetch")
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Fetch.
+	_job, err := jobs.Fetch(job.ID)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Job should have been fetched and content of two jobs should be equal
+	if _job == nil {
+		t.Fatal("expected job to be fetched")
+	}
+	if job.Data != _job.Data {
+		t.Error("expected data of the jobs to be equal")
+	}
+
+	jobs.Ack(_job)
+}
+
 func TestDelay(t *testing.T) {
 	// Connect to Disque.
 	jobs, err := disque.New("127.0.0.1:7711")
@@ -281,7 +312,7 @@ func TestQueueLength(t *testing.T) {
 		t.Error(err)
 	}
 	if length != 0 {
-		t.Error("unexpected length %v", length)
+		t.Fatalf("unexpected length %v", length)
 	}
 
 	// Enqueue hundred jobs.
