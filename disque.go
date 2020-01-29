@@ -379,3 +379,29 @@ func (pool *Pool) ActiveLen(queue string) (int, error) {
 	}
 	return len(jobs), nil
 }
+
+// ScanJobs returns slice of jobs IDs from queue
+func (pool *Pool) ScanJobs(cursor, count int, queue string) ([]string, error) {
+	sess := pool.redis.Get()
+	defer sess.Close()
+	reply, err := sess.Do("JSCAN", cursor, "COUNT", count, "QUEUE", queue)
+	if err != nil {
+		return nil, err
+	}
+	replyArr, ok := reply.([]interface{})
+	if !ok || len(replyArr) != 2 {
+		return nil, errors.New("unexpected reply #1")
+	}
+	replyIDs, ok := replyArr[1].([]interface{})
+	if !ok {
+		return nil, errors.New("unexpected reply #2")
+	}
+	jobsIDs := make([]string, len(replyIDs))
+	for i := range replyIDs {
+		jobsIDs[i], ok = replyIDs[i].(string)
+		if !ok {
+			return nil, errors.New("unexpected job ID")
+		}
+	}
+	return jobsIDs, nil
+}

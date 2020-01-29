@@ -21,6 +21,62 @@ func TestPing(t *testing.T) {
 	}
 }
 
+func ackJobs(t *testing.T, pool *disque.Pool, jobs []*disque.Job) {
+	for _, j := range jobs {
+		err := pool.Ack(j)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestScanJobsIDs(t *testing.T) {
+	// Connect to Disque.
+	pool, err := disque.New("127.0.0.1:7711")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	data := []string{
+		"test1",
+		"test2",
+		"test3",
+		"test4",
+		"test5",
+	}
+
+	jobs := make([]*disque.Job, len(data))
+	for i, d := range data {
+		job, err := pool.TTL(time.Second).Add(d, "test:jscan")
+		if err != nil {
+			t.Fatal(err)
+		}
+		jobs[i] = job
+	}
+
+	tc := []struct{
+		cursor int
+		count int
+		want int
+	}{
+		{cursor: 0, count: 5, want: 5},
+		{cursor: 0, count: 4, want: 4},
+		{cursor: 3, count: 2, want: 2},
+	}
+	for _, c := range tc {
+		jobsIDs, err := pool.ScanJobs(c.cursor, c.count, "test:jscan")
+		if err != nil {
+			ackJobs(t, pool, jobs)
+			t.Fatal(err)
+		}
+		if len(jobsIDs) != c.want {
+			ackJobs(t, pool, jobs)
+			t.Errorf("unexpected length %v", len(jobsIDs))
+		}
+	}
+}
+
 func TestFetch(t *testing.T) {
 	// Connect to Disque.
 	jobs, err := disque.New("127.0.0.1:7711")
@@ -329,7 +385,7 @@ func TestQueueLength(t *testing.T) {
 		t.Error(err)
 	}
 	if length != 100 {
-		t.Error("unexpected length %v", length)
+		t.Errorf("unexpected length %v", length)
 	}
 
 	// Dequeue hundred jobs.
@@ -347,6 +403,6 @@ func TestQueueLength(t *testing.T) {
 		t.Error(err)
 	}
 	if length != 0 {
-		t.Error("unexpected length %v", length)
+		t.Errorf("unexpected length %v", length)
 	}
 }
