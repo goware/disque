@@ -9,6 +9,13 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
+const (
+	JobStateWaitRepl = "wait-repl"
+	JobStateActive   = "active"
+	JobStateQueued  = "queued"
+	JobStateAcked   = "acked"
+)
+
 // Pool represent Redis connection to a Disque Pool
 // with a certain Disque configuration.
 type Pool struct {
@@ -365,7 +372,7 @@ func (pool *Pool) ActiveLen(queue string) (int, error) {
 	sess := pool.redis.Get()
 	defer sess.Close()
 
-	reply, err := sess.Do("JSCAN", "QUEUE", queue, "STATE", "active")
+	reply, err := sess.Do("JSCAN", "QUEUE", queue, "STATE", JobStateActive)
 	if err != nil {
 		return 0, err
 	}
@@ -378,4 +385,30 @@ func (pool *Pool) ActiveLen(queue string) (int, error) {
 		return 0, errors.New("unexpected reply #2")
 	}
 	return len(jobs), nil
+}
+
+// ScanJobs returns slice of jobs IDs from queue
+func (pool *Pool) ScanJobs(queue string, state string) ([]string, error) {
+	sess := pool.redis.Get()
+	defer sess.Close()
+	reply, err := sess.Do("JSCAN", 0, "QUEUE", queue, "STATE", state)
+	if err != nil {
+		return nil, err
+	}
+	replyArr, ok := reply.([]interface{})
+	if !ok || len(replyArr) != 2 {
+		return nil, errors.New("unexpected reply #1")
+	}
+	replyIDs, ok := replyArr[1].([]interface{})
+	if !ok {
+		return nil, errors.New("unexpected reply #2")
+	}
+	jobsIDs := make([]string, len(replyIDs))
+	for i := range replyIDs {
+		jobsIDs[i], ok = replyIDs[i].(string)
+		if !ok {
+			return nil, errors.New("unexpected job ID")
+		}
+	}
+	return jobsIDs, nil
 }
